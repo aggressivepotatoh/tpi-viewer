@@ -1,6 +1,7 @@
 package main
 
 import "./core"
+import "./ui"
 import "core:fmt"
 import "core:os"
 
@@ -9,6 +10,7 @@ main :: proc() {
 		fmt.eprintln("Usage: tpi-viewer <path-to-install>")
 		os.exit(1)
 	}
+
 	target_dir := os.args[1]
 	fmt.println("Scanning directory: ", target_dir)
 
@@ -27,4 +29,6 @@ main :: proc() {
 		if file.is_dir do prefix = "[DIR] "
 		fmt.printf("%s %s\n", prefix, file.name)
 	}
+
+	ui.boot(files)
 }

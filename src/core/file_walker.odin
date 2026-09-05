@@ -4,16 +4,11 @@ import "core:fmt"
 import "core:os"
 import "core:path/filepath"
 import "core:strings"
-File_Info :: struct {
-	name:   string,
-	path:   string,
-	is_dir: bool,
-}
 
 walk_directory :: proc(dir_path: string) -> ([dynamic]File_Info, bool) {
 	results: [dynamic]File_Info
 
-	w := os.walker_create_path(dir_path)
+	w := os.walker_create_path(strings.join([]string{dir_path, "Data"}, "/"))
 	defer os.walker_destroy(&w)
 
 	for walk in os.walker_walk(&w) {
