@@ -3,259 +3,108 @@ package ui
 import clay "../../clay-odin"
 import "base:runtime"
 import "core:math"
-import "core:strings"
-import "core:unicode/utf8"
-import rl "vendor:raylib"
+import sdl "vendor:sdl3"
+import sdl_ttf "vendor:sdl3/ttf"
 
-Raylib_Font :: struct {
-	fontId: u16,
-	font:   rl.Font,
-}
-
-clay_color_to_rl_color :: proc(color: clay.Color) -> rl.Color {
+clay_color_to_sdl_color :: proc(color: clay.Color) -> sdl.Color {
 	return {u8(color.r), u8(color.g), u8(color.b), u8(color.a)}
 }
 
-raylib_fonts := [dynamic]Raylib_Font{}
+sdl_fonts := [dynamic]^sdl_ttf.Font{}
 
-measure_text :: measure_text_ascii
-
-measure_text_ascii :: proc "c" (
+measure_text :: proc "c" (
 	text: clay.StringSlice,
 	config: ^clay.TextElementConfig,
 	userData: rawptr,
 ) -> clay.Dimensions {
-	line_width: f32 = 0
-
-	font := raylib_fonts[config.fontId].font
-	text_str := string(text.chars[:text.length])
-
-	for i in 0 ..< len(text_str) {
-		glyph_index := text_str[i] - 32
-
-		glyph := font.glyphs[glyph_index]
-
-		if glyph.advanceX != 0 {
-			line_width += f32(glyph.advanceX)
-		} else {
-			line_width += font.recs[glyph_index].width + f32(font.glyphs[glyph_index].offsetX)
-		}
-	}
-
-	scaleFactor := f32(config.fontSize) / f32(font.baseSize)
-
-	// Note:
-	//   I'd expect this to be `len(text_str) - 1`,
-	//   but that seems to be one letterSpacing too small
-	//   maybe that's a raylib bug, maybe that's Clay?
-	total_spacing := f32(len(text_str)) * f32(config.letterSpacing)
-
-	return {width = line_width * scaleFactor + total_spacing, height = f32(config.fontSize)}
-}
-
-measure_text_unicode :: proc "c" (
-	text: clay.StringSlice,
-	config: ^clay.TextElementConfig,
-	userData: rawptr,
-) -> clay.Dimensions {
-	// Needed for grapheme_count
 	context = runtime.default_context()
 
-	line_width: f32 = 0
+	font := sdl_fonts[config.fontId]
 
-	font := raylib_fonts[config.fontId].font
-	text_str := string(text.chars[:text.length])
+	width: i32
+	height: i32
 
-	// This function seems somewhat expensive, if you notice performance issues, you could assume
-	// - 1 codepoint per visual character (no grapheme clusters), where you can get the length from the loop
-	// - 1 byte per visual character (ascii), where you can get the length with `text.length`
-	// see `measure_text_ascii`
-	grapheme_count, _, _ := utf8.grapheme_count(text_str)
+	sdl_ttf.SetFontSize(font, f32(config.fontSize))
 
-	for letter, byte_idx in text_str {
-		glyph_index := rl.GetGlyphIndex(font, letter)
-
-		glyph := font.glyphs[glyph_index]
-
-		if glyph.advanceX != 0 {
-			line_width += f32(glyph.advanceX)
-		} else {
-			line_width += font.recs[glyph_index].width + f32(font.glyphs[glyph_index].offsetX)
-		}
+	if !sdl_ttf.GetStringSize(font, cstring(text.chars), uint(text.length), &width, &height) {
+		sdl.LogError(i32(sdl.LogCategory.ERROR), "Failed to measure text: %s", sdl.GetError())
 	}
 
-	scaleFactor := f32(config.fontSize) / f32(font.baseSize)
-
-	// Note:
-	//   I'd expect this to be `grapheme_count - 1`,
-	//   but that seems to be one letterSpacing too small
-	//   maybe that's a raylib bug, maybe that's Clay?
-	total_spacing := f32(grapheme_count) * f32(config.letterSpacing)
-
-	return {width = line_width * scaleFactor + total_spacing, height = f32(config.fontSize)}
+	return {f32(width), f32(height)}
 }
 
-clay_raylib_render :: proc(
-	render_commands: ^clay.ClayArray(clay.RenderCommand),
+clay_sdl_render :: proc(
+	render_commands: ^clay.ClayArray(clay.RenderCommand), // renderer_data: clay.rendererda,
 	allocator := context.temp_allocator,
 ) {
 	overlay_colors := make([dynamic]clay.Color, allocator)
 	for i in 0 ..< render_commands.length {
 		render_command := clay.RenderCommandArray_Get(render_commands, i)
 		bounds := render_command.boundingBox
+		rect := sdl.FRect {
+			x = bounds.x,
+			y = bounds.y,
+			w = bounds.width,
+			h = bounds.height,
+		}
 
 		switch render_command.commandType {
 		case .None:
 		case .Text:
 			config := render_command.renderData.text
 
-			text := string(config.stringContents.chars[:config.stringContents.length])
+			font := sdl_fonts[config.fontId]
 
-			// Raylib uses C strings instead of Odin strings, so we need to clone
-			// Assume this will be freed elsewhere since we default to the temp allocator
-			cstr_text := strings.clone_to_cstring(text, allocator)
+			sdl_ttf.SetFontSize(font, f32(config.fontSize))
 
-			font := raylib_fonts[config.fontId].font
-			rl.DrawTextEx(
+			text := sdl_ttf.CreateText(
+				text_engine,
 				font,
-				cstr_text,
-				{bounds.x, bounds.y},
-				f32(config.fontSize),
-				f32(config.letterSpacing),
-				clay_color_to_rl_color(config.textColor),
+				cstring(config.stringContents.chars),
+				uint(config.stringContents.length),
 			)
+
+			sdl_color := clay_color_to_sdl_color(config.textColor)
+
+			sdl_ttf.SetTextColor(text, sdl_color.r, sdl_color.g, sdl_color.b, sdl_color.a)
+
+			sdl_ttf.DrawRendererText(text, rect.x, rect.y)
+
+			sdl_ttf.DestroyText(text)
 		case .Image:
-			config := render_command.renderData.image
-			tint: clay.Color
-			if len(overlay_colors) > 0 {
-				tint = overlay_colors[len(overlay_colors) - 1]
-			}
-			if tint == 0 {
-				tint = {255, 255, 255, 255}
+			// TODO image tint
+			texture := (^sdl.Texture)(render_command.renderData.image.imageData)
+			dest := sdl.FRect{rect.x, rect.y, rect.w, rect.h}
+
+			sdl.RenderTexture(renderer, texture, nil, &dest)
+		case .ScissorStart:
+			clipping_rectangle := sdl.Rect {
+				x = i32(math.round(bounds.x)),
+				y = i32(math.round(bounds.y)),
+				w = i32(math.round(bounds.width)),
+				h = i32(math.round(bounds.height)),
 			}
 
-			imageTexture := (^rl.Texture2D)(config.imageData)
-			rl.DrawTextureEx(
-				imageTexture^,
-				{bounds.x, bounds.y},
-				0,
-				bounds.width / f32(imageTexture.width),
-				clay_color_to_rl_color(tint),
-			)
-		case .ScissorStart:
-			rl.BeginScissorMode(
-				i32(math.round(bounds.x)),
-				i32(math.round(bounds.y)),
-				i32(math.round(bounds.width)),
-				i32(math.round(bounds.height)),
-			)
+			sdl.SetRenderClipRect(renderer, &clipping_rectangle)
 		case .ScissorEnd:
-			rl.EndScissorMode()
+			sdl.SetRenderClipRect(renderer, nil)
 		case .Rectangle:
 			config := render_command.renderData.rectangle
+			sdl.SetRenderDrawBlendMode(renderer, {.BLEND})
+			draw_color := clay_color_to_sdl_color(config.backgroundColor)
+			sdl.SetRenderDrawColor(
+				renderer,
+				draw_color.r,
+				draw_color.g,
+				draw_color.b,
+				draw_color.a,
+			)
 			if config.cornerRadius.topLeft > 0 {
-				radius: f32 = (config.cornerRadius.topLeft * 2) / min(bounds.width, bounds.height)
-				draw_rect_rounded(
-					bounds.x,
-					bounds.y,
-					bounds.width,
-					bounds.height,
-					radius,
-					config.backgroundColor,
-				)
+				draw_rect_rounded(rect, config.cornerRadius.topLeft, config.backgroundColor)
 			} else {
-				draw_rect(bounds.x, bounds.y, bounds.width, bounds.height, config.backgroundColor)
+				sdl.RenderFillRect(renderer, &rect)
 			}
-		case .Border:
-			config := render_command.renderData.border
-			// Left border
-			if config.width.left > 0 {
-				draw_rect(
-					bounds.x,
-					bounds.y + config.cornerRadius.topLeft,
-					f32(config.width.left),
-					bounds.height - config.cornerRadius.topLeft - config.cornerRadius.bottomLeft,
-					config.color,
-				)
-			}
-			// Right border
-			if config.width.right > 0 {
-				draw_rect(
-					bounds.x + bounds.width - f32(config.width.right),
-					bounds.y + config.cornerRadius.topRight,
-					f32(config.width.right),
-					bounds.height - config.cornerRadius.topRight - config.cornerRadius.bottomRight,
-					config.color,
-				)
-			}
-			// Top border
-			if config.width.top > 0 {
-				draw_rect(
-					bounds.x + config.cornerRadius.topLeft,
-					bounds.y,
-					bounds.width - config.cornerRadius.topLeft - config.cornerRadius.topRight,
-					f32(config.width.top),
-					config.color,
-				)
-			}
-			// Bottom border
-			if config.width.bottom > 0 {
-				draw_rect(
-					bounds.x + config.cornerRadius.bottomLeft,
-					bounds.y + bounds.height - f32(config.width.bottom),
-					bounds.width -
-					config.cornerRadius.bottomLeft -
-					config.cornerRadius.bottomRight,
-					f32(config.width.bottom),
-					config.color,
-				)
-			}
-
-			// Rounded Borders
-			if config.cornerRadius.topLeft > 0 {
-				draw_arc(
-					bounds.x + config.cornerRadius.topLeft,
-					bounds.y + config.cornerRadius.topLeft,
-					config.cornerRadius.topLeft - f32(config.width.top),
-					config.cornerRadius.topLeft,
-					180,
-					270,
-					config.color,
-				)
-			}
-			if config.cornerRadius.topRight > 0 {
-				draw_arc(
-					bounds.x + bounds.width - config.cornerRadius.topRight,
-					bounds.y + config.cornerRadius.topRight,
-					config.cornerRadius.topRight - f32(config.width.top),
-					config.cornerRadius.topRight,
-					270,
-					360,
-					config.color,
-				)
-			}
-			if config.cornerRadius.bottomLeft > 0 {
-				draw_arc(
-					bounds.x + config.cornerRadius.bottomLeft,
-					bounds.y + bounds.height - config.cornerRadius.bottomLeft,
-					config.cornerRadius.bottomLeft - f32(config.width.top),
-					config.cornerRadius.bottomLeft,
-					90,
-					180,
-					config.color,
-				)
-			}
-			if config.cornerRadius.bottomRight > 0 {
-				draw_arc(
-					bounds.x + bounds.width - config.cornerRadius.bottomRight,
-					bounds.y + bounds.height - config.cornerRadius.bottomRight,
-					config.cornerRadius.bottomRight - f32(config.width.bottom),
-					config.cornerRadius.bottomRight,
-					0.1,
-					90,
-					config.color,
-				)
-			}
+		case .Border: // Unimplemented
 		case .OverlayColorStart:
 			config := render_command.renderData.overlayColor
 			append(&overlay_colors, config.color)
@@ -267,36 +116,220 @@ clay_raylib_render :: proc(
 	}
 }
 
-@(private = "file")
-draw_arc :: proc(
-	x, y: f32,
-	inner_rad, outer_rad: f32,
-	start_angle, end_angle: f32,
-	color: clay.Color,
-) {
-	rl.DrawRing(
-		{math.round(x), math.round(y)},
-		math.round(inner_rad),
-		outer_rad,
-		start_angle,
-		end_angle,
-		10,
-		clay_color_to_rl_color(color),
-	)
-}
+NUM_CIRCLE_SEGMENTS :: 16
 
-@(private = "file")
-draw_rect :: proc(x, y, w, h: f32, color: clay.Color) {
-	rl.DrawRectangle(
-		i32(math.round(x)),
-		i32(math.round(y)),
-		i32(math.round(w)),
-		i32(math.round(h)),
-		clay_color_to_rl_color(color),
-	)
-}
+draw_rect_rounded :: proc(rect: sdl.FRect, corner_radius: f32, raw_color: clay.Color) {
+	color := sdl.FColor{raw_color.r / 255, raw_color.g / 255, raw_color.b / 255, raw_color.a / 255}
 
-@(private = "file")
-draw_rect_rounded :: proc(x, y, w, h: f32, radius: f32, color: clay.Color) {
-	rl.DrawRectangleRounded({x, y, w, h}, radius, 8, clay_color_to_rl_color(color))
+	index_count: i32 = 0
+	vertex_count: i32 = 0
+
+	min_radius := sdl.min(rect.w, rect.h) / f32(2.0)
+	clamped_radius := sdl.min(corner_radius, min_radius)
+
+	num_circle_segments := sdl.max(NUM_CIRCLE_SEGMENTS, int(clamped_radius * 0.5))
+
+	total_vertices := 4 + (4 * (num_circle_segments * 2)) + 2 * 4
+	total_indices := 6 + (4 * (num_circle_segments * 3)) + 6 * 4
+
+	vertices := make([]sdl.Vertex, total_vertices)
+	indices := make([]i32, total_indices)
+
+	vertices[vertex_count] = sdl.Vertex {
+		{rect.x + clamped_radius, rect.y + clamped_radius},
+		color,
+		{0, 0},
+	} //0 center TL
+	vertex_count += 1
+	vertices[vertex_count] = sdl.Vertex {
+		{rect.x + rect.w - clamped_radius, rect.y + clamped_radius},
+		color,
+		{1, 0},
+	} //1 center TR
+	vertex_count += 1
+	vertices[vertex_count] = sdl.Vertex {
+		{rect.x + rect.w - clamped_radius, rect.y + rect.h - clamped_radius},
+		color,
+		{1, 1},
+	} //2 center BR
+	vertex_count += 1
+	vertices[vertex_count] = sdl.Vertex {
+		{rect.x + clamped_radius, rect.y + rect.h - clamped_radius},
+		color,
+		{0, 1},
+	} //3 center BL
+	vertex_count += 1
+
+	indices[index_count] = 0
+	index_count += 1
+	indices[index_count] = 1
+	index_count += 1
+	indices[index_count] = 3
+	index_count += 1
+	indices[index_count] = 1
+	index_count += 1
+	indices[index_count] = 2
+	index_count += 1
+	indices[index_count] = 3
+	index_count += 1
+
+	//define rounded corners as triangle fans
+	step := (math.PI / f32(2)) / f32(num_circle_segments)
+
+	for i in 0 ..< num_circle_segments {
+		angle1 := f32(i) * step
+		angle2 := (f32(i + 1.0)) * step
+
+		for j in 0 ..< 4 { 	// Iterate over four corners
+			cx: f32
+			cy: f32
+			sign_x: f32
+			sign_y: f32
+
+			switch (j) {
+			case 0:
+				// Top-left
+				sign_y = -1
+				cx = rect.x + clamped_radius
+				cy = rect.y + clamped_radius
+				sign_x = -1
+			case 1:
+				// Top-right
+				cx = rect.x + rect.w - clamped_radius
+				cy = rect.y + clamped_radius
+				sign_x = 1
+				sign_y = -1
+			case 2:
+				// Bottom-right
+				cx = rect.x + rect.w - clamped_radius
+				cy = rect.y + rect.h - clamped_radius
+				sign_x = 1
+				sign_y = 1
+			case 3:
+				// Bottom-left
+				cx = rect.x + clamped_radius
+				cy = rect.y + rect.h - clamped_radius
+				sign_x = -1
+				sign_y = 1
+			}
+
+			vertices[vertex_count] = sdl.Vertex {
+				{
+					cx + sdl.cosf(angle1) * clamped_radius * sign_x,
+					cy + sdl.sinf(angle1) * clamped_radius * sign_y,
+				},
+				color,
+				{0, 0},
+			}
+			vertex_count += 1
+			vertices[vertex_count] = sdl.Vertex {
+				{
+					cx + sdl.cosf(angle2) * clamped_radius * sign_x,
+					cy + sdl.sinf(angle2) * clamped_radius * sign_y,
+				},
+				color,
+				{0, 0},
+			}
+			vertex_count += 1
+
+			indices[index_count] = i32(j) // Connect to corresponding central rectangle vertex
+			index_count += 1
+			indices[index_count] = vertex_count - 2
+			index_count += 1
+			indices[index_count] = vertex_count - 1
+			index_count += 1
+		}
+	}
+
+	//Define edge rectangles
+	// Top edge
+	vertices[vertex_count] = sdl.Vertex{{rect.x + clamped_radius, rect.y}, color, {0, 0}} //TL
+	vertex_count += 1
+	vertices[vertex_count] = sdl.Vertex{{rect.x + rect.w - clamped_radius, rect.y}, color, {1, 0}} //TR
+	vertex_count += 1
+
+	indices[index_count] = 0
+	index_count += 1
+	indices[index_count] = vertex_count - 2 //TL
+	index_count += 1
+	indices[index_count] = vertex_count - 1 //TR
+	index_count += 1
+	indices[index_count] = 1
+	index_count += 1
+	indices[index_count] = 0
+	index_count += 1
+	indices[index_count] = vertex_count - 1 //TR
+	index_count += 1
+	// Right edge
+	vertices[vertex_count] = sdl.Vertex{{rect.x + rect.w, rect.y + clamped_radius}, color, {1, 0}} //RT
+	vertex_count += 1
+	vertices[vertex_count] = sdl.Vertex {
+		{rect.x + rect.w, rect.y + rect.h - clamped_radius},
+		color,
+		{1, 1},
+	} //RB
+	vertex_count += 1
+
+	indices[index_count] = 1
+	index_count += 1
+	indices[index_count] = vertex_count - 2 //RT
+	index_count += 1
+	indices[index_count] = vertex_count - 1 //RB
+	index_count += 1
+	indices[index_count] = 2
+	index_count += 1
+	indices[index_count] = 1
+	index_count += 1
+	indices[index_count] = vertex_count - 1 //RB
+	index_count += 1
+	// Bottom edge
+	vertices[vertex_count] = sdl.Vertex {
+		{rect.x + rect.w - clamped_radius, rect.y + rect.h},
+		color,
+		{1, 1},
+	} //BR
+	vertex_count += 1
+	vertices[vertex_count] = sdl.Vertex{{rect.x + clamped_radius, rect.y + rect.h}, color, {0, 1}} //BL
+	vertex_count += 1
+
+	indices[index_count] = 2
+	index_count += 1
+	indices[index_count] = vertex_count - 2 //BR
+	index_count += 1
+	indices[index_count] = vertex_count - 1 //BL
+	index_count += 1
+	indices[index_count] = 3
+	index_count += 1
+	indices[index_count] = 2
+	index_count += 1
+	indices[index_count] = vertex_count - 1 //BL
+	index_count += 1
+	// Left edge
+	vertices[vertex_count] = sdl.Vertex{{rect.x, rect.y + rect.h - clamped_radius}, color, {0, 1}} //LB
+	vertex_count += 1
+	vertices[vertex_count] = sdl.Vertex{{rect.x, rect.y + clamped_radius}, color, {0, 0}} //LT
+	vertex_count += 1
+
+	indices[index_count] = 3
+	index_count += 1
+	indices[index_count] = vertex_count - 2 //LB
+	index_count += 1
+	indices[index_count] = vertex_count - 1 //LT
+	index_count += 1
+	indices[index_count] = 0
+	index_count += 1
+	indices[index_count] = 3
+	index_count += 1
+	indices[index_count] = vertex_count - 1 //LT
+	index_count += 1
+
+	// Render everything
+	sdl.RenderGeometry(
+		renderer,
+		nil,
+		raw_data(vertices),
+		vertex_count,
+		raw_data(indices),
+		index_count,
+	)
 }

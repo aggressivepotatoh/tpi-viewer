@@ -3,8 +3,15 @@ package ui
 import clay "../../clay-odin"
 import "../core"
 import "base:runtime"
+import "core:c"
 import "core:fmt"
-import rl "vendor:raylib"
+import sdl "vendor:sdl3"
+import sdl_ttf "vendor:sdl3/ttf"
+
+window: ^sdl.Window = nil
+renderer: ^sdl.Renderer = nil
+text_engine: ^sdl_ttf.TextEngine = nil
+debug_mode_enabled: bool = false
 
 error_handler :: proc "c" (errorData: clay.ErrorData) {
 	context = runtime.default_context()
@@ -74,7 +81,7 @@ render_file_item :: proc(file: core.File_Info, file_index: int) {
 
 selected_document_index := 0
 
-createLayout :: proc(frametime: f32) -> clay.ClayArray(clay.RenderCommand) {
+create_layout :: proc(frametime: f32) -> clay.ClayArray(clay.RenderCommand) {
 	layout_expand := clay.Sizing {
 		width  = clay.SizingGrow(),
 		height = clay.SizingGrow(),
@@ -135,79 +142,125 @@ createLayout :: proc(frametime: f32) -> clay.ClayArray(clay.RenderCommand) {
 
 load_font :: proc {
 	load_font_from_embed,
-	load_font_from_path,
 }
 
 load_font_from_embed :: proc(fontId: u16, fontSize: u16, bytes: []u8) {
 	assign_at(
-		&raylib_fonts,
+		&sdl_fonts,
 		fontId,
-		Raylib_Font {
-			font = rl.LoadFontFromMemory(
-				".ttf",
-				raw_data(bytes),
-				i32(len(bytes)),
-				cast(i32)fontSize * 2,
-				nil,
-				0,
-			),
-			fontId = cast(u16)fontId,
-		},
+		sdl_ttf.OpenFontIO(sdl.IOFromConstMem(raw_data(bytes), len(bytes)), true, f32(fontSize)),
 	)
-	rl.SetTextureFilter(raylib_fonts[fontId].font.texture, rl.TextureFilter.TRILINEAR)
-}
-
-load_font_from_path :: proc(fontId: u16, fontSize: u16, path: cstring) {
-	assign_at(
-		&raylib_fonts,
-		fontId,
-		Raylib_Font {
-			font = rl.LoadFontEx(path, cast(i32)fontSize * 2, nil, 0),
-			fontId = cast(u16)fontId,
-		},
-	)
-	rl.SetTextureFilter(raylib_fonts[fontId].font.texture, rl.TextureFilter.TRILINEAR)
 }
 
 boot :: proc(loaded_files: [dynamic]core.File_Info) {
 	files = loaded_files[:] // yeah this is probably bad
-	min_memory_size := clay.MinMemorySize()
-	memory := make([^]u8, min_memory_size)
-	arena: clay.Arena = clay.CreateArenaWithCapacityAndMemory(uint(min_memory_size), memory)
-	clay.Initialize(
-		arena,
-		{cast(f32)rl.GetScreenWidth(), cast(f32)rl.GetScreenHeight()},
-		{handler = error_handler},
-	)
-	clay.SetMeasureTextFunction(measure_text, nil)
+	sdl.EnterAppMainCallbacks(0, nil, app_init, app_iterate, app_event, app_quit)
+}
 
-	rl.SetConfigFlags({.VSYNC_HINT, .WINDOW_RESIZABLE, .MSAA_4X_HINT})
+app_init :: proc "c" (appstate: ^rawptr, argc: c.int, argv: [^]cstring) -> sdl.AppResult {
+	context = runtime.default_context()
 
-	rl.InitWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "Theme Park Inc. Viewer")
-	defer rl.CloseWindow()
+	if !sdl.SetAppMetadata("Theme Park Inc. Viewer", "0.1", "com.aggressivepotato.tpi-viewer") {
+		return .FAILURE
+	}
+
+	if !sdl.Init({.VIDEO}) {
+		sdl.Log("Couldn't initialize SDL: %s", sdl.GetError())
+		return .FAILURE
+	}
+
+	if !sdl_ttf.Init() {
+		sdl.Log("Couldn't initialize SDL_ttf: %s", sdl.GetError())
+		return .FAILURE
+	}
+
+	if !sdl.CreateWindowAndRenderer(
+		"Theme Park Inc. Viewer",
+		WINDOW_WIDTH,
+		WINDOW_HEIGHT,
+		{.RESIZABLE},
+		&window,
+		&renderer,
+	) {
+		sdl.Log("Couldn't create window/renderer: %s", sdl.GetError())
+		return .FAILURE
+	}
+
+	sdl.SetRenderVSync(renderer, 1)
+
+	text_engine = sdl_ttf.CreateRendererTextEngine(renderer)
+	if text_engine == nil {
+		sdl.Log("Failed to create text engine from renderer: %s", sdl.GetError())
+		return .FAILURE
+	}
 
 	load_font(FONT_MONO_16, 16, MONO_REGULAR_BYTES)
 	load_font(FONT_SANS_16, 16, SANS_REGULAR_BYTES)
 
-	rl.SetTargetFPS(rl.GetMonitorRefreshRate(0))
+	width, height: c.int
+	sdl.GetWindowSize(window, &width, &height)
 
-	debug_mode_enabled: bool = false
+	min_memory_size := clay.MinMemorySize()
+	memory := make([^]u8, min_memory_size)
+	arena: clay.Arena = clay.CreateArenaWithCapacityAndMemory(uint(min_memory_size), memory)
+	clay.Initialize(arena, {cast(f32)width, cast(f32)height}, {handler = error_handler})
+	clay.SetMeasureTextFunction(measure_text, nil)
 
-	for !rl.WindowShouldClose() {
-		defer free_all(context.temp_allocator)
+	return .CONTINUE
+}
 
-		if rl.IsKeyPressed(.D) {
+app_iterate :: proc "c" (appstate: rawptr) -> sdl.AppResult {
+	context = runtime.default_context()
+
+	mouse_x: f32
+	mouse_y: f32
+
+	buttons := sdl.GetMouseState(&mouse_x, &mouse_y)
+
+	clay.SetPointerState({mouse_x, mouse_y}, sdl.MouseButtonFlag.LEFT in buttons)
+
+	render_commands := create_layout(f32(sdl.GetTicksNS()))
+	sdl.SetRenderDrawColor(renderer, 0, 0, 0, 255)
+	sdl.RenderClear(renderer)
+
+	clay_sdl_render(&render_commands)
+
+	sdl.RenderPresent(renderer)
+
+	return .CONTINUE
+}
+
+app_event :: proc "c" (appsttate: rawptr, event: ^sdl.Event) -> sdl.AppResult {
+	context = runtime.default_context()
+
+	#partial switch event.type {
+	case .QUIT:
+		return .SUCCESS
+	case .WINDOW_RESIZED:
+		clay.SetLayoutDimensions({f32(event.window.data1), f32(event.window.data2)})
+	case .MOUSE_WHEEL:
+		clay.UpdateScrollContainers(true, {event.wheel.x, event.wheel.y}, 0.01)
+	case .KEY_DOWN:
+		fmt.println("Key pressed this frame", event.key.scancode)
+		if event.key.scancode == .D {
 			debug_mode_enabled = !debug_mode_enabled
 			clay.SetDebugModeEnabled(debug_mode_enabled)
 		}
-
-		clay.SetPointerState(rl.GetMousePosition(), rl.IsMouseButtonDown(.LEFT))
-		clay.SetLayoutDimensions({cast(f32)rl.GetScreenWidth(), cast(f32)rl.GetScreenHeight()})
-		render_commands := createLayout(rl.GetFrameTime())
-
-		rl.BeginDrawing()
-		rl.ClearBackground(rl.BLACK)
-		clay_raylib_render(&render_commands)
-		rl.EndDrawing()
 	}
+
+	return .CONTINUE
+}
+
+app_quit :: proc "c" (appstate: rawptr, result: sdl.AppResult) {
+	for font in sdl_fonts {
+		sdl_ttf.CloseFont(font)
+	}
+
+	sdl_ttf.DestroyRendererTextEngine(text_engine)
+
+	sdl.DestroyRenderer(renderer)
+	sdl.DestroyWindow(window)
+
+	sdl_ttf.Quit()
+	sdl.Quit()
 }
