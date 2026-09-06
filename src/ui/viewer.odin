@@ -50,7 +50,12 @@ handle_file_interaction :: proc "c" (
 	if ptr_data.state == .PressedThisFrame {
 		file_index := int(uintptr(user_data))
 		if file_index >= 0 && file_index < len(files) {
-			selected_document_index = file_index
+			file := files[file_index]
+			if file.is_dir {
+				files[file_index].is_expanded = !file.is_expanded
+			} else {
+				selected_document_index = file_index
+			}
 		}
 	}
 }
@@ -61,7 +66,12 @@ render_file_item :: proc(file: core.File_Info, file_index: int) {
 		backgroundColor = COLOR_ACCENT if file_index == selected_document_index else clay.Color{0, 0, 0, 0},
 		cornerRadius = clay.CornerRadiusAll(10),
 		layout = {
-			padding = clay.PaddingAll(16),
+			padding = clay.Padding {
+				bottom = 16,
+				top = 16,
+				right = 16,
+				left = u16(file.depth + 1) * 16,
+			},
 			sizing = {width = clay.SizingGrow()},
 			childGap = 16,
 		},
@@ -114,10 +124,23 @@ create_layout :: proc(frametime: f32) -> clay.ClayArray(clay.RenderCommand) {
 					sizing = {width = clay.SizingFixed(250), height = clay.SizingGrow()},
 					padding = clay.PaddingAll(16),
 				},
-				clip = {vertical = true, childOffset = clay.GetScrollOffset()},
+				clip = {vertical = true, horizontal = true, childOffset = clay.GetScrollOffset()},
 			},
 			) {
+				current_dir_depth := 0
+				is_dir_visible := false
 				for file_index in 0 ..< len(files) {
+					current_file := files[file_index]
+
+					if !is_dir_visible && current_file.depth > current_dir_depth {
+						continue
+					}
+
+					if current_file.is_dir {
+						current_dir_depth = current_file.depth
+						is_dir_visible = current_file.is_expanded
+					}
+
 					render_file_item(files[file_index], file_index)
 				}
 			}

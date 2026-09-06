@@ -2,38 +2,52 @@ package core
 
 import "core:fmt"
 import "core:os"
-import "core:path/filepath"
+import "core:slice"
 import "core:strings"
 
 walk_directory :: proc(dir_path: string) -> ([dynamic]File_Info, bool) {
 	results: [dynamic]File_Info
 
-	w := os.walker_create_path(strings.join([]string{dir_path, "Data"}, "/"))
-	defer os.walker_destroy(&w)
-
-	for walk in os.walker_walk(&w) {
-		if path, err := os.walker_error(&w); err != nil {
-			fmt.eprintfln("failed walking %s: %s", path, err)
-			continue
-		}
-
-		if walk.type != .Regular && walk.type != .Directory {
-			continue
-		}
-
-		file_path, join_err := filepath.join([]string{}, context.temp_allocator)
-		if join_err != nil {
-			fmt.eprintfln("Failed to get file path for file %s", walk.name)
-			continue
-		}
-
-		file := File_Info {
-			name   = strings.clone(walk.name),
-			path   = file_path,
-			is_dir = walk.type == .Directory,
-		}
-		append(&results, file)
-	}
+	walk_recursive(dir_path, 0, &results)
 
 	return results, true
+}
+
+file_sort :: proc(i, j: os.File_Info) -> bool {
+	is_i_dir := i.type == .Directory
+	is_j_dir := j.type == .Directory
+
+	if is_i_dir && !is_j_dir do return true
+	if is_j_dir && !is_i_dir do return false
+	return i.fullpath < j.fullpath
+}
+
+walk_recursive :: proc(path: string, depth: int, results: ^[dynamic]File_Info) {
+	files, read_err := os.read_directory_by_path(path, 0, context.allocator)
+
+	if read_err != nil {
+		fmt.eprintfln("Error reading %s: %v", path, read_err)
+	}
+
+	slice.sort_by(files, file_sort)
+
+	for file in files {
+		if file.type != .Directory && file.type != .Regular {
+			continue
+		}
+
+		file_info := File_Info {
+			name        = strings.clone(file.name),
+			path        = file.fullpath,
+			is_dir      = file.type == .Directory,
+			depth       = depth,
+			is_expanded = true,
+		}
+
+		append(results, file_info)
+
+		if file.type == .Directory {
+			walk_recursive(file.fullpath, depth + 1, results)
+		}
+	}
 }

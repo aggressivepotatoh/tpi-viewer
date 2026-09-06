@@ -24,11 +24,5 @@ main :: proc() {
 
 	fmt.printfln("Found %d files", len(files))
 
-	for file in files {
-		prefix := "[FILE]"
-		if file.is_dir do prefix = "[DIR] "
-		fmt.printf("%s %s\n", prefix, file.name)
-	}
-
 	ui.boot(files)
 }
