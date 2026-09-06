@@ -89,7 +89,7 @@ render_file_item :: proc(file: core.File_Info, file_index: int) {
 	}
 }
 
-selected_document_index := 0
+selected_document_index := -1
 
 create_layout :: proc(frametime: f32) -> clay.ClayArray(clay.RenderCommand) {
 	layout_expand := clay.Sizing {
@@ -148,15 +148,34 @@ create_layout :: proc(frametime: f32) -> clay.ClayArray(clay.RenderCommand) {
 			{layout = {sizing = layout_expand, padding = clay.PaddingAll(16)}},
 			) {
 				if clay.UI(clay.ID("Stage"))({layout = {sizing = layout_expand}}) {
-					selected_document := files[selected_document_index]
-					clay.Text(
-						selected_document.name,
-						{fontId = FONT_MONO_16, fontSize = 24, textColor = COLOR_TEXT_SECONDARY},
-					)
-					clay.Text(
-						selected_document.path,
-						{fontId = FONT_MONO_16, fontSize = 18, textColor = COLOR_TEXT_SECONDARY},
-					)
+					if selected_document_index >= 0 {
+						selected_document := files[selected_document_index]
+						clay.Text(
+							selected_document.name,
+							{
+								fontId = FONT_MONO_16,
+								fontSize = 24,
+								textColor = COLOR_TEXT_SECONDARY,
+							},
+						)
+						clay.Text(
+							selected_document.path,
+							{
+								fontId = FONT_MONO_16,
+								fontSize = 18,
+								textColor = COLOR_TEXT_SECONDARY,
+							},
+						)
+					} else {
+						clay.Text(
+							"Select a file to view",
+							{
+								fontId = FONT_MONO_16,
+								fontSize = 24,
+								textColor = COLOR_TEXT_SECONDARY,
+							},
+						)
+					}
 				}
 			}
 		}
