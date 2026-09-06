@@ -332,4 +332,7 @@ draw_rect_rounded :: proc(rect: sdl.FRect, corner_radius: f32, raw_color: clay.C
 		raw_data(indices),
 		index_count,
 	)
+
+	delete(vertices)
+	delete(indices)
 }
