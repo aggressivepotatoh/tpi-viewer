@@ -114,6 +114,7 @@ create_layout :: proc(frametime: f32) -> clay.ClayArray(clay.RenderCommand) {
 					sizing = {width = clay.SizingFixed(250), height = clay.SizingGrow()},
 					padding = clay.PaddingAll(16),
 				},
+				clip = {vertical = true, childOffset = clay.GetScrollOffset()},
 			},
 			) {
 				for file_index in 0 ..< len(files) {
