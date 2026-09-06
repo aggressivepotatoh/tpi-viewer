@@ -251,6 +251,8 @@ app_iterate :: proc "c" (appstate: rawptr) -> sdl.AppResult {
 
 	sdl.RenderPresent(renderer)
 
+	free_all(context.temp_allocator)
+
 	return .CONTINUE
 }
 
