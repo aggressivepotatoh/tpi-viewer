@@ -27,6 +27,9 @@ SANS_REGULAR_BYTES :: #load("../../resources/Open_Sans/static/OpenSans-Regular.t
 WINDOW_WIDTH :: 1280
 WINDOW_HEIGHT :: 720
 
+pending_scroll_delta_x: f32
+pending_scroll_delta_y: f32
+last_ticks: u64
 COLOR_LIGHT :: clay.Color{224, 215, 210, 255}
 COLOR_RED :: clay.Color{168, 66, 28, 255}
 COLOR_ORANGE :: clay.Color{225, 138, 50, 255}
@@ -256,14 +259,25 @@ app_init :: proc "c" (appstate: ^rawptr, argc: c.int, argv: [^]cstring) -> sdl.A
 app_iterate :: proc "c" (appstate: rawptr) -> sdl.AppResult {
 	context = runtime.default_context()
 
+	current_ticks := sdl.GetTicks()
+
+	if last_ticks == 0 do last_ticks = current_ticks
+
+	delta_time := f32(current_ticks - last_ticks) / 1000
+
+	last_ticks = current_ticks
+
 	mouse_x: f32
 	mouse_y: f32
 
 	buttons := sdl.GetMouseState(&mouse_x, &mouse_y)
 
 	clay.SetPointerState({mouse_x, mouse_y}, sdl.MouseButtonFlag.LEFT in buttons)
+	clay.UpdateScrollContainers(true, {pending_scroll_delta_x, pending_scroll_delta_y}, delta_time)
+	pending_scroll_delta_x = 0
+	pending_scroll_delta_y = 0
 
-	render_commands := create_layout(f32(sdl.GetTicksNS()))
+	render_commands := create_layout(f32(delta_time))
 	sdl.SetRenderDrawColor(renderer, 0, 0, 0, 255)
 	sdl.RenderClear(renderer)
 
@@ -285,7 +299,8 @@ app_event :: proc "c" (appsttate: rawptr, event: ^sdl.Event) -> sdl.AppResult {
 	case .WINDOW_RESIZED:
 		clay.SetLayoutDimensions({f32(event.window.data1), f32(event.window.data2)})
 	case .MOUSE_WHEEL:
-		clay.UpdateScrollContainers(true, {event.wheel.x, event.wheel.y}, 0.01)
+		pending_scroll_delta_x += event.wheel.x
+		pending_scroll_delta_y += event.wheel.y
 	case .KEY_DOWN:
 		fmt.println("Key pressed this frame", event.key.scancode)
 		if event.key.scancode == .D {
