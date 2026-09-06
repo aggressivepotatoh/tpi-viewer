@@ -102,7 +102,7 @@ create_layout :: proc(frametime: f32) -> clay.ClayArray(clay.RenderCommand) {
 	if clay.UI(clay.ID("OuterContainer"))(
 	{
 		backgroundColor = COLOR_BACKGROUND,
-		layout = {layoutDirection = .TopToBottom, sizing = layout_expand, childGap = 16},
+		layout = {layoutDirection = .TopToBottom, sizing = layout_expand},
 	},
 	) {
 		if clay.UI(clay.ID("HeaderBar"))(
@@ -125,6 +125,7 @@ create_layout :: proc(frametime: f32) -> clay.ClayArray(clay.RenderCommand) {
 					padding = clay.PaddingAll(16),
 				},
 				clip = {vertical = true, horizontal = true, childOffset = clay.GetScrollOffset()},
+				border = {width = {right = 5}, color = COLOR_ACCENT},
 			},
 			) {
 				current_dir_depth := 0

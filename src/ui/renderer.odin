@@ -104,7 +104,87 @@ clay_sdl_render :: proc(
 			} else {
 				sdl.RenderFillRect(renderer, &rect)
 			}
-		case .Border: // Unimplemented
+		case .Border:
+			config := render_command.renderData.border
+
+			min_radius := sdl.min(rect.w, rect.h) / f32(2)
+			clamped_radii := clay.CornerRadius {
+				topLeft     = sdl.min(config.cornerRadius.topLeft, min_radius),
+				topRight    = sdl.min(config.cornerRadius.topRight, min_radius),
+				bottomLeft  = sdl.min(config.cornerRadius.bottomLeft, min_radius),
+				bottomRight = sdl.min(config.cornerRadius.bottomRight, min_radius),
+			}
+
+			sdl.SetRenderDrawColor(
+				renderer,
+				u8(config.color.r),
+				u8(config.color.g),
+				u8(config.color.b),
+				u8(config.color.a),
+			)
+
+			// Edges
+			if config.width.left > 0 {
+				starting_y := rect.y + clamped_radii.topLeft
+				length := rect.h - clamped_radii.topLeft - clamped_radii.bottomLeft
+				line := sdl.FRect{rect.x - 1, starting_y, f32(config.width.left), length}
+				sdl.RenderFillRect(renderer, &line)
+			}
+			if config.width.right > 0 {
+				starting_x := rect.x + rect.w - f32(config.width.right) + 1
+				starting_y := rect.y + clamped_radii.topRight
+				length := rect.h - clamped_radii.topRight - clamped_radii.bottomRight
+				line := sdl.FRect{starting_x, starting_y, f32(config.width.right), length}
+				sdl.RenderFillRect(renderer, &line)
+			}
+			if config.width.top > 0 {
+				starting_x := rect.x + clamped_radii.topLeft
+				length := rect.w - clamped_radii.topLeft - clamped_radii.topRight
+				line := sdl.FRect{starting_x, rect.y - 1, length, f32(config.width.top)}
+				sdl.RenderFillRect(renderer, &line)
+			}
+			if config.width.bottom > 0 {
+				starting_x := rect.x + clamped_radii.bottomLeft
+				starting_y := rect.y + rect.h - f32(config.width.bottom) + 1
+				length := rect.w - clamped_radii.bottomLeft - clamped_radii.bottomRight
+				line := sdl.FRect{starting_x, starting_y, length, f32(config.width.bottom)}
+				sdl.RenderFillRect(renderer, &line)
+			}
+
+			// Corners
+			if (config.cornerRadius.topLeft > 0) {
+				center_x := rect.x + clamped_radii.topLeft - 1
+				center_y := rect.y + clamped_radii.topLeft - 1
+				render_arc(
+					renderer,
+					{center_x, center_y},
+					clamped_radii.topLeft,
+					180,
+					270,
+					f32(config.width.top),
+					config.color,
+				)
+				// SDL_Clay_RenderArc(rendererData, (SDL_FPoint){centerX, centerY}, clampedRadii.topLeft,
+				//     180.0f, 270.0f, config->width.top, config->color);
+			}
+		// if (config->cornerRadius.topRight > 0) {
+		//     const float centerX = rect.x + rect.w - clampedRadii.topRight;
+		//     const float centerY = rect.y + clampedRadii.topRight - 1;
+		//     SDL_Clay_RenderArc(rendererData, (SDL_FPoint){centerX, centerY}, clampedRadii.topRight,
+		//         270.0f, 360.0f, config->width.top, config->color);
+		// }
+		// if (config->cornerRadius.bottomLeft > 0) {
+		//     const float centerX = rect.x + clampedRadii.bottomLeft -1;
+		//     const float centerY = rect.y + rect.h - clampedRadii.bottomLeft;
+		//     SDL_Clay_RenderArc(rendererData, (SDL_FPoint){centerX, centerY}, clampedRadii.bottomLeft,
+		//         90.0f, 180.0f, config->width.bottom, config->color);
+		// }
+		// if (config->cornerRadius.bottomRight > 0) {
+		//     const float centerX = rect.x + rect.w - clampedRadii.bottomRight;
+		//     const float centerY = rect.y + rect.h - clampedRadii.bottomRight;
+		//     SDL_Clay_RenderArc(rendererData, (SDL_FPoint){centerX, centerY}, clampedRadii.bottomRight,
+		//         0.0f, 90.0f, config->width.bottom, config->color);
+		// }
 		case .OverlayColorStart:
 			config := render_command.renderData.overlayColor
 			append(&overlay_colors, config.color)
@@ -335,4 +415,41 @@ draw_rect_rounded :: proc(rect: sdl.FRect, corner_radius: f32, raw_color: clay.C
 
 	delete(vertices)
 	delete(indices)
+}
+
+render_arc :: proc(
+	renderer: ^sdl.Renderer,
+	center: sdl.FPoint,
+	radius: f32,
+	start_angle: f32,
+	end_angle: f32,
+	thickness: f32,
+	color: clay.Color,
+) {
+	sdl.SetRenderDrawColor(renderer, u8(color.r), u8(color.g), u8(color.b), u8(color.a))
+
+	rad_start := start_angle * (math.PI / 180)
+	rad_end := end_angle * (math.PI / 180)
+
+	num_circle_segments := sdl.max(NUM_CIRCLE_SEGMENTS, i32(radius * 1.5))
+
+	angle_step := (rad_end - rad_start) / f32(num_circle_segments)
+	thickness_step: f32 = 0.4
+
+	for t := thickness_step; t < thickness - thickness_step; t += thickness_step {
+		points := make([]sdl.FPoint, num_circle_segments + 1)
+		clamped_radius := sdl.max(radius - t, 1)
+
+		for i in 0 ..= num_circle_segments {
+			angle := rad_start + f32(i) * angle_step
+			points[i] = {
+				sdl.roundf(center.x + sdl.cosf(angle) * clamped_radius),
+				sdl.roundf(center.y + sdl.sinf(angle) * clamped_radius),
+			}
+		}
+
+		sdl.RenderLines(renderer, raw_data(points), num_circle_segments + 1)
+
+		delete(points)
+	}
 }
