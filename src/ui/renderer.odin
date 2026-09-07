@@ -152,7 +152,7 @@ clay_sdl_render :: proc(
 			}
 
 			// Corners
-			if (config.cornerRadius.topLeft > 0) {
+			if config.cornerRadius.topLeft > 0 {
 				center_x := rect.x + clamped_radii.topLeft - 1
 				center_y := rect.y + clamped_radii.topLeft - 1
 				render_arc(
@@ -164,27 +164,46 @@ clay_sdl_render :: proc(
 					f32(config.width.top),
 					config.color,
 				)
-				// SDL_Clay_RenderArc(rendererData, (SDL_FPoint){centerX, centerY}, clampedRadii.topLeft,
-				//     180.0f, 270.0f, config->width.top, config->color);
 			}
-		// if (config->cornerRadius.topRight > 0) {
-		//     const float centerX = rect.x + rect.w - clampedRadii.topRight;
-		//     const float centerY = rect.y + clampedRadii.topRight - 1;
-		//     SDL_Clay_RenderArc(rendererData, (SDL_FPoint){centerX, centerY}, clampedRadii.topRight,
-		//         270.0f, 360.0f, config->width.top, config->color);
-		// }
-		// if (config->cornerRadius.bottomLeft > 0) {
-		//     const float centerX = rect.x + clampedRadii.bottomLeft -1;
-		//     const float centerY = rect.y + rect.h - clampedRadii.bottomLeft;
-		//     SDL_Clay_RenderArc(rendererData, (SDL_FPoint){centerX, centerY}, clampedRadii.bottomLeft,
-		//         90.0f, 180.0f, config->width.bottom, config->color);
-		// }
-		// if (config->cornerRadius.bottomRight > 0) {
-		//     const float centerX = rect.x + rect.w - clampedRadii.bottomRight;
-		//     const float centerY = rect.y + rect.h - clampedRadii.bottomRight;
-		//     SDL_Clay_RenderArc(rendererData, (SDL_FPoint){centerX, centerY}, clampedRadii.bottomRight,
-		//         0.0f, 90.0f, config->width.bottom, config->color);
-		// }
+			if config.cornerRadius.topRight > 0 {
+				center_x := rect.x + rect.w - clamped_radii.topRight
+				center_y := rect.y + clamped_radii.topRight - 1
+				render_arc(
+					renderer,
+					{center_x, center_y},
+					clamped_radii.topRight,
+					270,
+					360,
+					f32(config.width.top),
+					config.color,
+				)
+			}
+			if config.cornerRadius.bottomLeft > 0 {
+				center_x := rect.x + clamped_radii.bottomLeft - 1
+				center_y := rect.y + rect.h - clamped_radii.bottomLeft
+				render_arc(
+					renderer,
+					{center_x, center_y},
+					clamped_radii.bottomLeft,
+					90,
+					180,
+					f32(config.width.bottom),
+					config.color,
+				)
+			}
+			if config.cornerRadius.bottomRight > 0 {
+				center_x := rect.x + rect.w - clamped_radii.bottomRight
+				center_y := rect.y + rect.h - clamped_radii.bottomRight
+				render_arc(
+					renderer,
+					{center_x, center_y},
+					clamped_radii.bottomRight,
+					0,
+					90,
+					f32(config.width.bottom),
+					config.color,
+				)
+			}
 		case .OverlayColorStart:
 			config := render_command.renderData.overlayColor
 			append(&overlay_colors, config.color)

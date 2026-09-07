@@ -2,6 +2,8 @@ package ui
 
 import clay "../../clay-odin"
 import "../core"
+import "./components"
+import "./styles"
 import "base:runtime"
 import "core:c"
 import "core:fmt"
@@ -18,30 +20,12 @@ error_handler :: proc "c" (errorData: clay.ErrorData) {
 	fmt.eprintfln("Clay Error %e", errorData)
 }
 
-FONT_MONO_16 :: 0
-FONT_SANS_16 :: 1
-
-MONO_REGULAR_BYTES :: #load("../../resources/JetBrains_Mono/static/JetBrainsMono-Regular.ttf")
-SANS_REGULAR_BYTES :: #load("../../resources/Open_Sans/static/OpenSans-Regular.ttf")
-
 WINDOW_WIDTH :: 1280
 WINDOW_HEIGHT :: 720
 
 pending_scroll_delta_x: f32
 pending_scroll_delta_y: f32
 last_ticks: u64
-COLOR_LIGHT :: clay.Color{224, 215, 210, 255}
-COLOR_RED :: clay.Color{168, 66, 28, 255}
-COLOR_ORANGE :: clay.Color{225, 138, 50, 255}
-COLOR_BLACK :: clay.Color{0, 0, 0, 255}
-
-COLOR_BACKGROUND :: clay.Color{18, 18, 18, 255}
-COLOR_SURFACE := clay.Color{30, 30, 34, 255}
-COLOR_BORDER := clay.Color{48, 48, 56, 255}
-COLOR_TEXT_PRIMARY := clay.Color{240, 240, 245, 255}
-COLOR_TEXT_SECONDARY := clay.Color{160, 160, 175, 255}
-COLOR_ACCENT := clay.Color{0, 122, 204, 255}
-COLOR_HIGHLIGHT := clay.Color{46, 204, 113, 255}
 
 files := []core.File_Info{}
 
@@ -50,6 +34,8 @@ handle_file_interaction :: proc "c" (
 	ptr_data: clay.PointerData,
 	user_data: rawptr,
 ) {
+	context = runtime.default_context()
+
 	if ptr_data.state == .PressedThisFrame {
 		file_index := int(uintptr(user_data))
 		if file_index >= 0 && file_index < len(files) {
@@ -58,15 +44,16 @@ handle_file_interaction :: proc "c" (
 				files[file_index].is_expanded = !file.is_expanded
 			} else {
 				selected_document_index = file_index
+				core.load_file(files[file_index])
 			}
 		}
 	}
 }
 
 render_file_item :: proc(file: core.File_Info, file_index: int) {
-	if clay.UI()(
+	if clay.UI(clay.ID("FileItem", u32(file_index)))(
 	{
-		backgroundColor = COLOR_ACCENT if file_index == selected_document_index else clay.Color{0, 0, 0, 0},
+		backgroundColor = styles.COLOR_ACCENT if file_index == selected_document_index else clay.Color{0, 0, 0, 0},
 		cornerRadius = clay.CornerRadiusAll(10),
 		layout = {
 			padding = clay.Padding {
@@ -81,14 +68,17 @@ render_file_item :: proc(file: core.File_Info, file_index: int) {
 	},
 	) {
 		clay.OnHover(handle_file_interaction, rawptr(uintptr(file_index)))
-		text_color := COLOR_TEXT_SECONDARY
-		if clay.Hovered() do text_color = COLOR_ACCENT
-		if file_index == selected_document_index do text_color = COLOR_TEXT_PRIMARY
+		text_color := styles.COLOR_TEXT_SECONDARY
+		if clay.Hovered() do text_color = styles.COLOR_ACCENT
+		if file_index == selected_document_index do text_color = styles.COLOR_TEXT_PRIMARY
 		clay.TextDynamic(
 			"D" if file.is_dir else "F",
-			{fontId = FONT_MONO_16, fontSize = 16, textColor = text_color},
+			{fontId = styles.FONT_MONO_16, fontSize = 16, textColor = text_color},
 		)
-		clay.TextDynamic(file.name, {fontId = FONT_MONO_16, fontSize = 16, textColor = text_color})
+		clay.TextDynamic(
+			file.name,
+			{fontId = styles.FONT_MONO_16, fontSize = 16, textColor = text_color},
+		)
 	}
 }
 
@@ -104,13 +94,13 @@ create_layout :: proc(frametime: f32) -> clay.ClayArray(clay.RenderCommand) {
 	clay.BeginLayout()
 	if clay.UI(clay.ID("OuterContainer"))(
 	{
-		backgroundColor = COLOR_BACKGROUND,
+		backgroundColor = styles.COLOR_BACKGROUND,
 		layout = {layoutDirection = .TopToBottom, sizing = layout_expand},
 	},
 	) {
 		if clay.UI(clay.ID("HeaderBar"))(
 		{
-			backgroundColor = COLOR_SURFACE,
+			backgroundColor = styles.COLOR_SURFACE,
 			layout = {
 				sizing = {width = clay.SizingGrow(), height = clay.SizingFixed(60)},
 				padding = clay.PaddingAll(16),
@@ -128,7 +118,7 @@ create_layout :: proc(frametime: f32) -> clay.ClayArray(clay.RenderCommand) {
 					padding = clay.PaddingAll(16),
 				},
 				clip = {vertical = true, horizontal = true, childOffset = clay.GetScrollOffset()},
-				border = {width = {right = 5}, color = COLOR_ACCENT},
+				border = {width = {right = 5}, color = styles.COLOR_ACCENT},
 			},
 			) {
 				current_dir_depth := 0
@@ -148,37 +138,105 @@ create_layout :: proc(frametime: f32) -> clay.ClayArray(clay.RenderCommand) {
 					render_file_item(files[file_index], file_index)
 				}
 			}
+
 			if clay.UI(clay.ID("StageContainer"))(
-			{layout = {sizing = layout_expand, padding = clay.PaddingAll(16)}},
+			{
+				layout = {
+					sizing = layout_expand,
+					padding = clay.PaddingAll(16),
+					layoutDirection = .TopToBottom,
+				},
+			},
 			) {
-				if clay.UI(clay.ID("Stage"))({layout = {sizing = layout_expand}}) {
-					if selected_document_index >= 0 {
-						selected_document := files[selected_document_index]
+				selected_document: Maybe(core.File_Info) =
+					files[selected_document_index] if selected_document_index >= 0 else nil
+
+				if clay.UI(clay.ID("StageTitle"))(
+				{layout = {sizing = {width = clay.SizingGrow()}, layoutDirection = .TopToBottom}},
+				) {
+					if file, ok := selected_document.?; ok {
 						clay.Text(
-							selected_document.name,
+							file.name,
 							{
-								fontId = FONT_MONO_16,
+								fontId = styles.FONT_MONO_16,
 								fontSize = 24,
-								textColor = COLOR_TEXT_SECONDARY,
+								textColor = styles.COLOR_TEXT_SECONDARY,
 							},
 						)
 						clay.Text(
-							selected_document.path,
+							file.path,
 							{
-								fontId = FONT_MONO_16,
+								fontId = styles.FONT_MONO_16,
 								fontSize = 18,
-								textColor = COLOR_TEXT_SECONDARY,
+								textColor = styles.COLOR_TEXT_SECONDARY,
 							},
 						)
 					} else {
 						clay.Text(
 							"Select a file to view",
 							{
-								fontId = FONT_MONO_16,
+								fontId = styles.FONT_MONO_16,
 								fontSize = 24,
-								textColor = COLOR_TEXT_SECONDARY,
+								textColor = styles.COLOR_TEXT_SECONDARY,
 							},
 						)
+					}
+				}
+
+				if clay.UI(clay.ID("Stage"))(
+				{
+					layout = {
+						sizing = layout_expand,
+						childAlignment = {x = .Center, y = .Center},
+						padding = clay.PaddingAll(16),
+					},
+					clip = {
+						vertical = true,
+						horizontal = true,
+						childOffset = clay.GetScrollOffset(),
+					},
+				},
+				) {
+					if _, ok := selected_document.?; ok {
+						base_result, ok_base_result := core.get_base_result(core.file_result)
+						if !ok_base_result {
+							fmt.eprintln("Something went wrong fetching base result!")
+						}
+						if base_result.loading {
+							clay.Text(
+								"Loading file...",
+								{
+									fontId = styles.FONT_SANS_16,
+									fontSize = 16,
+									textColor = styles.COLOR_TEXT_SECONDARY,
+								},
+							)
+						} else {
+							switch base_result.status {
+							case .Success:
+								components.display_data_component(core.file_result)
+							case .Failed:
+								clay.Text(
+									"Failed to render file",
+									{
+										fontId = styles.FONT_SANS_16,
+										fontSize = 16,
+										textColor = styles.COLOR_TEXT_SECONDARY,
+									},
+								)
+							case .Idle:
+								fallthrough
+							case .Unsupported:
+								clay.Text(
+									"Unsupported file",
+									{
+										fontId = styles.FONT_SANS_16,
+										fontSize = 16,
+										textColor = styles.COLOR_TEXT_SECONDARY,
+									},
+								)
+							}
+						}
 					}
 				}
 			}
@@ -241,12 +299,13 @@ app_init :: proc "c" (appstate: ^rawptr, argc: c.int, argv: [^]cstring) -> sdl.A
 		return .FAILURE
 	}
 
-	load_font(FONT_MONO_16, 16, MONO_REGULAR_BYTES)
-	load_font(FONT_SANS_16, 16, SANS_REGULAR_BYTES)
+	load_font(styles.FONT_MONO_16, 16, styles.MONO_REGULAR_BYTES)
+	load_font(styles.FONT_SANS_16, 16, styles.SANS_REGULAR_BYTES)
 
 	width, height: c.int
 	sdl.GetWindowSize(window, &width, &height)
 
+	clay.SetMaxElementCount(16_000)
 	min_memory_size := clay.MinMemorySize()
 	memory := make([^]u8, min_memory_size)
 	arena: clay.Arena = clay.CreateArenaWithCapacityAndMemory(uint(min_memory_size), memory)
