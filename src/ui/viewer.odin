@@ -51,16 +51,18 @@ handle_file_interaction :: proc "c" (
 }
 
 render_file_item :: proc(file: core.File_Info, file_index: int) {
+	item_is_selected := selected_document_index == file_index
+	item_bg_color: clay.Color = clay.Color{0, 0, 0, 0}
+	if item_is_selected do item_bg_color = styles.COLOR_ACCENT
 	if clay.UI(clay.ID("FileItem", u32(file_index)))(
 	{
-		backgroundColor = styles.COLOR_ACCENT if file_index == selected_document_index else clay.Color{0, 0, 0, 0},
-		cornerRadius = clay.CornerRadiusAll(10),
+		backgroundColor = styles.COLOR_SURFACE if clay.Hovered() && !item_is_selected else item_bg_color,
 		layout = {
 			padding = clay.Padding {
-				bottom = 16,
-				top = 16,
+				bottom = 12,
+				top = 12,
 				right = 16,
-				left = u16(file.depth + 1) * 16,
+				left = u16(file.depth + 1) * 8,
 			},
 			sizing = {width = clay.SizingGrow()},
 			childGap = 16,
@@ -73,11 +75,11 @@ render_file_item :: proc(file: core.File_Info, file_index: int) {
 		if file_index == selected_document_index do text_color = styles.COLOR_TEXT_PRIMARY
 		clay.TextDynamic(
 			"D" if file.is_dir else "F",
-			{fontId = styles.FONT_MONO_16, fontSize = 16, textColor = text_color},
+			{fontId = styles.FONT_MONO_16, fontSize = 12, textColor = text_color},
 		)
 		clay.TextDynamic(
 			file.name,
-			{fontId = styles.FONT_MONO_16, fontSize = 16, textColor = text_color},
+			{fontId = styles.FONT_MONO_16, fontSize = 12, textColor = text_color},
 		)
 	}
 }
@@ -109,16 +111,14 @@ create_layout :: proc(frametime: f32) -> clay.ClayArray(clay.RenderCommand) {
 			},
 		},
 		) {}
-		if clay.UI(clay.ID("MainContent"))({layout = {sizing = layout_expand, childGap = 16}}) {
+		if clay.UI(clay.ID("MainContent"))({layout = {sizing = layout_expand}}) {
 			if clay.UI(clay.ID("FileBrowser"))(
 			{
 				layout = {
 					layoutDirection = .TopToBottom,
 					sizing = {width = clay.SizingFixed(250), height = clay.SizingGrow()},
-					padding = clay.PaddingAll(16),
 				},
 				clip = {vertical = true, horizontal = true, childOffset = clay.GetScrollOffset()},
-				border = {width = {right = 5}, color = styles.COLOR_ACCENT},
 			},
 			) {
 				current_dir_depth := 0
@@ -137,6 +137,15 @@ create_layout :: proc(frametime: f32) -> clay.ClayArray(clay.RenderCommand) {
 
 					render_file_item(files[file_index], file_index)
 				}
+			}
+
+			if clay.UI(clay.ID("ResizeBar"))(
+			{
+				layout = {sizing = {width = clay.SizingFixed(5), height = clay.SizingGrow()}},
+				backgroundColor = styles.COLOR_ACCENT,
+			},
+			) {
+
 			}
 
 			if clay.UI(clay.ID("StageContainer"))(
@@ -332,7 +341,11 @@ app_iterate :: proc "c" (appstate: rawptr) -> sdl.AppResult {
 	buttons := sdl.GetMouseState(&mouse_x, &mouse_y)
 
 	clay.SetPointerState({mouse_x, mouse_y}, sdl.MouseButtonFlag.LEFT in buttons)
-	clay.UpdateScrollContainers(true, {pending_scroll_delta_x, pending_scroll_delta_y}, delta_time)
+	clay.UpdateScrollContainers(
+		false,
+		{pending_scroll_delta_x, pending_scroll_delta_y},
+		delta_time,
+	)
 	pending_scroll_delta_x = 0
 	pending_scroll_delta_y = 0
 
