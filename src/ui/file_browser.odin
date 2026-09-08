@@ -139,12 +139,7 @@ render_filter_button :: proc($text: string, filter: FILTER) {
 
 render_file_browser :: proc() {
 	if clay.UI(clay.ID("FileBrowserContainer"))(
-	{
-		layout = {
-			layoutDirection = .TopToBottom,
-			sizing = {width = clay.SizingGrow(), height = clay.SizingGrow()},
-		},
-	},
+	{layout = {layoutDirection = .TopToBottom, sizing = {height = clay.SizingGrow()}}},
 	) {
 		if clay.UI(clay.ID("FileBrowserControls"))(
 		{
