@@ -2,6 +2,7 @@ package core
 
 import "core:fmt"
 import "core:os"
+import "core:path/filepath"
 import "core:slice"
 import "core:strings"
 
@@ -36,12 +37,15 @@ walk_recursive :: proc(path: string, depth: int, results: ^[dynamic]File_Info) {
 			continue
 		}
 
+		ext := filepath.ext(file.fullpath)
+
 		file_info := File_Info {
 			name        = strings.clone(file.name),
 			path        = file.fullpath,
 			is_dir      = file.type == .Directory,
 			depth       = depth,
 			is_expanded = true,
+			asset_type  = asset_type_from_extension(ext),
 		}
 
 		append(results, file_info)

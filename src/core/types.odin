@@ -8,6 +8,7 @@ File_Info :: struct {
 	is_dir:      bool,
 	depth:       int,
 	is_expanded: bool,
+	asset_type:  Asset_Type,
 }
 
 File_Load_Status :: enum {
@@ -26,6 +27,8 @@ Asset_Type :: enum {
 
 asset_type_from_extension :: proc(extension: string) -> Asset_Type {
 	switch extension {
+	case ".sam":
+		return .SAM
 	case ".png":
 		return .PNG
 	case ".tga":

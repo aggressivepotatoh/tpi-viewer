@@ -3,7 +3,7 @@ package core
 import "./formats"
 import "core:fmt"
 import "core:os"
-import "core:path/filepath"
+
 
 file_result: File_Result
 
@@ -12,14 +12,12 @@ load_file :: proc(file: File_Info) {
 
 	free_file_result(file_result)
 
-	ext := filepath.ext(file.path)
-
-	switch ext {
-	case ".sam":
+	switch file.asset_type {
+	case .SAM:
 		sam_result := Sam_Result {
 			path    = file.path,
 			loading = true,
-			type    = .SAM,
+			type    = file.asset_type,
 		}
 		file_result = sam_result
 		lines, raw_data, err := formats.parse_sam_file(file.path)
@@ -37,17 +35,17 @@ load_file :: proc(file: File_Info) {
 		sam_result.status = .Success
 		sam_result.loading = false
 		file_result = sam_result
-	case ".tga", ".png":
+	case .TGA, .PNG:
 		image_result := Image_Result {
 			path    = file.path,
 			loading = true,
-			type    = asset_type_from_extension(ext),
+			type    = file.asset_type,
 		}
 		file_result = image_result
 
 		data, err := os.read_entire_file(file.path, context.allocator)
 		if err != nil {
-			fmt.eprintfln("Failed to load %s file %s: %v", ext, file.path, err)
+			fmt.eprintfln("Failed to load file %s: %v", file.path, err)
 			image_result.loading = false
 			image_result.status = .Failed
 			file_result = image_result
@@ -60,8 +58,8 @@ load_file :: proc(file: File_Info) {
 		image_result.loading = false
 
 		file_result = image_result
-	case:
-		fmt.printfln("Extension %s is unsupported", ext)
+	case .UNKNOWN:
+		fmt.printfln("Asset type is unsupported: %s", file.path)
 		unknown_result := Unknown_Result {
 			loading = false,
 			status  = .Unsupported,
