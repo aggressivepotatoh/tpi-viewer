@@ -53,10 +53,12 @@ render_file_item :: proc(file: core.File_Info, file_index: int) {
 		text_color := styles.COLOR_TEXT_SECONDARY
 		if clay.Hovered() do text_color = styles.COLOR_ACCENT
 		if file_index == selected_document_index do text_color = styles.COLOR_TEXT_PRIMARY
-		clay.TextDynamic(
-			"D" if file.is_dir else "F",
-			{fontId = styles.FONT_MONO_16, fontSize = 12, textColor = text_color},
-		)
+		if clay.UI(clay.ID("Chevron", u32(file_index)))(
+		{
+			layout = {sizing = {width = clay.SizingFixed(16), height = clay.SizingFixed(16)}},
+			image = {imageData = styles.get_icon(styles.ICON_CHEVRON_DOWN_ID if file.is_expanded else styles.ICON_CHEVRON_RIGHT_ID)} if file.is_dir else {},
+		},
+		) {}
 		clay.TextDynamic(
 			file.name,
 			{fontId = styles.FONT_MONO_16, fontSize = 12, textColor = text_color},

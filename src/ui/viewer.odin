@@ -247,6 +247,8 @@ app_init :: proc "c" (appstate: ^rawptr, argc: c.int, argv: [^]cstring) -> sdl.A
 	load_font(styles.FONT_MONO_16, 16, styles.MONO_REGULAR_BYTES)
 	load_font(styles.FONT_SANS_16, 16, styles.SANS_REGULAR_BYTES)
 
+	styles.load_all_icons(renderer)
+
 	width, height: c.int
 	sdl.GetWindowSize(window, &width, &height)
 
@@ -346,17 +348,20 @@ app_event :: proc "c" (appsttate: rawptr, event: ^sdl.Event) -> sdl.AppResult {
 }
 
 app_quit :: proc "c" (appstate: rawptr, result: sdl.AppResult) {
+	context = runtime.default_context()
 	for font in sdl_fonts {
 		sdl_ttf.CloseFont(font)
 	}
 
 	sdl_ttf.DestroyRendererTextEngine(text_engine)
 
-	sdl.DestroyRenderer(renderer)
-	sdl.DestroyWindow(window)
+	styles.free_all_icons()
 
 	sdl.DestroyCursor(resize_cursor)
 	sdl.DestroyCursor(default_cursor)
+
+	sdl.DestroyRenderer(renderer)
+	sdl.DestroyWindow(window)
 
 	sdl_ttf.Quit()
 	sdl.Quit()
