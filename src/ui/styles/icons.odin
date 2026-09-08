@@ -10,10 +10,16 @@ Icon :: struct {
 
 ICON_CHEVRON_RIGHT_ID :: 0
 ICON_CHEVRON_DOWN_ID :: 1
+ICON_FILE_COG :: 2
+ICON_FILE_IMAGE :: 3
+ICON_FILE_QUESTION_MARK :: 4
 
 icons: []Icon = {
 	{bytes = #load("../../../resources/lucide-icons/chevron-right.svg")},
 	{bytes = #load("../../../resources/lucide-icons/chevron-down.svg")},
+	{bytes = #load("../../../resources/lucide-icons/file-cog.svg")},
+	{bytes = #load("../../../resources/lucide-icons/file-image.svg")},
+	{bytes = #load("../../../resources/lucide-icons/file-question-mark.svg")},
 }
 
 get_icon :: proc(id: int) -> ^sdl.Texture {

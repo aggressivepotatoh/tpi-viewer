@@ -30,6 +30,19 @@ handle_file_interaction :: proc "c" (
 	}
 }
 
+icon_for_asset_type :: proc(asset_type: core.Asset_Type) -> int {
+	switch asset_type {
+	case .UNKNOWN:
+		return styles.ICON_FILE_QUESTION_MARK
+	case .SAM:
+		return styles.ICON_FILE_COG
+	case .PNG, .TGA:
+		return styles.ICON_FILE_IMAGE
+	case:
+		return styles.ICON_FILE_QUESTION_MARK
+	}
+}
+
 render_file_item :: proc(file: core.File_Info, file_index: int) {
 	item_is_selected := selected_document_index == file_index
 	item_bg_color: clay.Color = clay.Color{0, 0, 0, 0}
@@ -56,7 +69,7 @@ render_file_item :: proc(file: core.File_Info, file_index: int) {
 		if clay.UI(clay.ID("Chevron", u32(file_index)))(
 		{
 			layout = {sizing = {width = clay.SizingFixed(16), height = clay.SizingFixed(16)}},
-			image = {imageData = styles.get_icon(styles.ICON_CHEVRON_DOWN_ID if file.is_expanded else styles.ICON_CHEVRON_RIGHT_ID)} if file.is_dir else {},
+			image = {imageData = styles.get_icon(styles.ICON_CHEVRON_DOWN_ID if file.is_expanded else styles.ICON_CHEVRON_RIGHT_ID)} if file.is_dir else {imageData = styles.get_icon(icon_for_asset_type(file.asset_type))},
 		},
 		) {}
 		clay.TextDynamic(
