@@ -13,8 +13,9 @@ ICON_CHEVRON_DOWN_ID :: 1
 ICON_FILE_COG :: 2
 ICON_FILE_IMAGE :: 3
 ICON_FILE_QUESTION_MARK :: 4
-LIST_FILTER :: 5
-CHECK :: 6
+ICON_LIST_FILTER :: 5
+ICON_CHECK :: 6
+ICON_EARTH :: 7
 
 icons: []Icon = {
 	{bytes = #load("../../../resources/lucide-icons/chevron-right.svg")},
@@ -24,6 +25,7 @@ icons: []Icon = {
 	{bytes = #load("../../../resources/lucide-icons/file-question-mark.svg")},
 	{bytes = #load("../../../resources/lucide-icons/list-filter.svg")},
 	{bytes = #load("../../../resources/lucide-icons/check.svg")},
+	{bytes = #load("../../../resources/lucide-icons/earth.svg")},
 }
 
 get_icon :: proc(id: int) -> ^sdl.Texture {

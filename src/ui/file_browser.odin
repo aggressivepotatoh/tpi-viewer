@@ -14,6 +14,7 @@ FILTER :: enum {
 	All,
 	Images,
 	Configuration,
+	World_Assets,
 	Unknown,
 }
 
@@ -61,6 +62,8 @@ is_file_in_filter :: proc(file: core.File_Info) -> bool {
 		return current_filter == .Images
 	case .SAM:
 		return current_filter == .Configuration
+	case .WAD:
+		return current_filter == .World_Assets
 	case .UNKNOWN:
 		return current_filter == .Unknown
 	}
@@ -76,6 +79,8 @@ icon_for_asset_type :: proc(asset_type: core.Asset_Type) -> int {
 		return styles.ICON_FILE_COG
 	case .PNG, .TGA:
 		return styles.ICON_FILE_IMAGE
+	case .WAD:
+		return styles.ICON_EARTH
 	case:
 		return styles.ICON_FILE_QUESTION_MARK
 	}
@@ -103,7 +108,7 @@ render_file_item :: proc(file: core.File_Info, file_index: int) {
 		clay.OnHover(handle_file_interaction, rawptr(uintptr(file_index)))
 		text_color := styles.COLOR_TEXT_SECONDARY
 		if clay.Hovered() do text_color = styles.COLOR_ACCENT
-		if file_index == selected_document_index do text_color = styles.COLOR_TEXT_PRIMARY
+		if item_is_selected do text_color = styles.COLOR_TEXT_PRIMARY
 		if clay.UI(clay.ID("Chevron", u32(file_index)))(
 		{
 			layout = {sizing = {width = clay.SizingFixed(16), height = clay.SizingFixed(16)}},
@@ -114,6 +119,42 @@ render_file_item :: proc(file: core.File_Info, file_index: int) {
 			file.name,
 			{fontId = styles.FONT_MONO_16, fontSize = 12, textColor = text_color},
 		)
+	}
+
+	// WAD sub-files!
+	if item_is_selected && file.asset_type == .WAD {
+		result := core.file_result.(core.Wad_Result)
+		if result.status == .Success {
+			for i in 0 ..< len(result.assets) {
+				asset := result.assets[i]
+				asset_is_selected := selected_asset_index == i
+				asset_bg_color: clay.Color = clay.Color{0, 0, 0, 0}
+				if asset_is_selected do asset_bg_color = styles.COLOR_ACCENT
+				if clay.UI(clay.ID("WadAsset", u32(i)))(
+				{
+					backgroundColor = styles.COLOR_SURFACE if clay.Hovered() && !asset_is_selected else asset_bg_color,
+					layout = {
+						padding = clay.Padding {
+							bottom = 12,
+							top = 12,
+							right = 16,
+							left = 16 + (u16(file.depth + 2) * 8),
+						},
+						sizing = {width = clay.SizingGrow()},
+						childGap = 16,
+					},
+				},
+				) {
+					// clay.OnHover(handle_file_interaction, rawptr(uintptr(file_index)))
+					text_color := styles.COLOR_TEXT_SECONDARY
+					if clay.Hovered() do text_color = styles.COLOR_ACCENT
+					if asset_is_selected do text_color = styles.COLOR_TEXT_PRIMARY
+					clay.Text(
+						asset.filename,
+						{fontId = styles.FONT_MONO_16, fontSize = 12, textColor = text_color},
+					)}
+			}
+		}
 	}
 }
 
@@ -126,7 +167,7 @@ render_filter_button :: proc($text: string, filter: FILTER) {
 		if clay.UI()(
 		{
 			layout = {sizing = {width = clay.SizingFixed(16), height = clay.SizingFixed(16)}},
-			image = {imageData = styles.get_icon(styles.CHECK)} if is_filter_active else {},
+			image = {imageData = styles.get_icon(styles.ICON_CHECK)} if is_filter_active else {},
 		},
 		) {}
 		clay.OnHover(handle_filter_button, rawptr(uintptr(filter)))
@@ -164,7 +205,7 @@ render_file_browser :: proc() {
 				if clay.UI(clay.ID("FilterButtonIcon"))(
 				{
 					layout = {sizing = {width = clay.SizingGrow(), height = clay.SizingGrow()}},
-					image = {imageData = styles.get_icon(styles.LIST_FILTER)},
+					image = {imageData = styles.get_icon(styles.ICON_LIST_FILTER)},
 				},
 				) {}
 
@@ -192,6 +233,7 @@ render_file_browser :: proc() {
 						render_filter_button("All", FILTER.All)
 						render_filter_button("Images", FILTER.Images)
 						render_filter_button("Configuration", FILTER.Configuration)
+						render_filter_button("World Assets", FILTER.World_Assets)
 						render_filter_button("Unknown", FILTER.Unknown)
 					}
 				}

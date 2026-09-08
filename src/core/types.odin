@@ -23,6 +23,7 @@ Asset_Type :: enum {
 	SAM,
 	PNG,
 	TGA,
+	WAD,
 }
 
 asset_type_from_extension :: proc(extension: string) -> Asset_Type {
@@ -33,6 +34,8 @@ asset_type_from_extension :: proc(extension: string) -> Asset_Type {
 		return .PNG
 	case ".tga":
 		return .TGA
+	case ".wad":
+		return .WAD
 	case:
 		return .UNKNOWN
 	}
@@ -56,6 +59,13 @@ Image_Result :: struct {
 	raw_data:        []byte,
 }
 
+Wad_Result :: struct {
+	using component: Base_Result,
+	header:          formats.Wad_Header,
+	raw_data:        []byte,
+	assets:          []formats.Wad_Asset,
+}
+
 Unknown_Result :: struct {
 	using component: Base_Result,
 }
@@ -63,6 +73,7 @@ Unknown_Result :: struct {
 File_Result :: union {
 	Sam_Result,
 	Image_Result,
+	Wad_Result,
 	Unknown_Result,
 }
 
@@ -71,6 +82,8 @@ get_base_result :: proc(result: File_Result) -> (Base_Result, bool) {
 	case Sam_Result:
 		return v.component, true
 	case Image_Result:
+		return v.component, true
+	case Wad_Result:
 		return v.component, true
 	case Unknown_Result:
 		return v.component, true

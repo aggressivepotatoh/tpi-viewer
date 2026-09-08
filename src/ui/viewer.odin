@@ -36,6 +36,7 @@ hovering_resize_bar := false
 resizing := false
 
 selected_document_index := -1
+selected_asset_index := -1
 
 select_file :: proc(file_index: int) {
 	components.clear_image()

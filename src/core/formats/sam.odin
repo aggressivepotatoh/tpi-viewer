@@ -3,7 +3,7 @@ package formats
 import "core:os"
 import "core:strings"
 
-ParseError :: union {
+SamParseError :: union {
 	os.Error,
 }
 
@@ -18,7 +18,7 @@ Line :: struct {
 	value: string,
 }
 
-parse_sam_file :: proc(file: string) -> ([]Line, []byte, ParseError) {
+parse_sam_file :: proc(file: string) -> ([]Line, []byte, SamParseError) {
 	lines: [dynamic]Line
 	data, err := os.read_entire_file(file, context.allocator)
 	if err != nil {

@@ -58,6 +58,32 @@ load_file :: proc(file: File_Info) {
 		image_result.loading = false
 
 		file_result = image_result
+	case .WAD:
+		wad_result := Wad_Result {
+			path    = file.path,
+			loading = true,
+			type    = file.asset_type,
+		}
+		file_result = wad_result
+
+		header, assets, data, err := formats.parse_wad_file(file.path)
+
+		if err != nil {
+			fmt.eprintfln("Failed to parse .wad file %s: %v", file.path, err)
+			wad_result.loading = false
+			wad_result.status = .Failed
+			file_result = wad_result
+			return
+		}
+
+		wad_result.header = header
+		wad_result.assets = assets
+		wad_result.raw_data = data
+
+		wad_result.status = .Success
+		wad_result.loading = false
+
+		file_result = wad_result
 	case .UNKNOWN:
 		fmt.printfln("Asset type is unsupported: %s", file.path)
 		unknown_result := Unknown_Result {
@@ -77,6 +103,10 @@ free_file_result :: proc(result: File_Result) {
 		delete(v.raw_data)
 	case Image_Result:
 		delete(v.raw_data)
+	case Wad_Result:
+		delete(v.raw_data)
+		// TODO do we need to delete the strings for each entry name or does this cascade?
+		delete(v.assets)
 	case Unknown_Result:
 	}
 }
