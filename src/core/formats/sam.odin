@@ -1,6 +1,5 @@
 package formats
 
-import "core:fmt"
 import "core:os"
 import "core:strings"
 

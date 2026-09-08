@@ -37,6 +37,11 @@ resizing := false
 
 selected_document_index := -1
 
+select_file :: proc(file_index: int) {
+	components.clear_image()
+	selected_document_index = file_index
+	core.load_file(files[file_index])
+}
 
 create_layout :: proc(frametime: f32) -> clay.ClayArray(clay.RenderCommand) {
 	layout_expand := clay.Sizing {
@@ -129,11 +134,7 @@ create_layout :: proc(frametime: f32) -> clay.ClayArray(clay.RenderCommand) {
 
 				if clay.UI(clay.ID("Stage"))(
 				{
-					layout = {
-						sizing = layout_expand,
-						childAlignment = {x = .Center, y = .Center},
-						padding = clay.PaddingAll(16),
-					},
+					layout = {sizing = layout_expand, padding = clay.PaddingAll(16)},
 					clip = {
 						vertical = true,
 						horizontal = true,
@@ -158,7 +159,7 @@ create_layout :: proc(frametime: f32) -> clay.ClayArray(clay.RenderCommand) {
 						} else {
 							switch base_result.status {
 							case .Success:
-								components.display_data_component(core.file_result)
+								components.display_data_component(renderer, core.file_result)
 							case .Failed:
 								clay.Text(
 									"Failed to render file",

@@ -24,8 +24,7 @@ handle_file_interaction :: proc "c" (
 			if file.is_dir {
 				files[file_index].is_expanded = !file.is_expanded
 			} else {
-				selected_document_index = file_index
-				core.load_file(files[file_index])
+				select_file(file_index)
 			}
 		}
 	}
