@@ -55,3 +55,30 @@ walk_recursive :: proc(path: string, depth: int, results: ^[dynamic]File_Info) {
 		}
 	}
 }
+
+get_file_info_from_path :: proc(path: string) -> File_Info {
+	handle, err := os.open(path, {.Read})
+
+	if err != os.ERROR_NONE {
+		fmt.eprintfln("Error opening file: %v", err)
+		os.exit(1)
+	}
+
+	defer os.close(handle)
+
+	file, stat_err := os.fstat(handle, context.allocator)
+	if stat_err != os.ERROR_NONE {
+		fmt.eprintfln("Error getting file info: %v", stat_err)
+		os.exit(1)
+	}
+
+	ext := filepath.ext(file.fullpath)
+
+	return File_Info {
+		name = strings.clone(file.name),
+		path = file.fullpath,
+		is_dir = file.type == .Directory,
+		is_expanded = true,
+		asset_type = asset_type_from_extension(ext),
+	}
+}
