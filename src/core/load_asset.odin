@@ -1,7 +1,6 @@
 package core
 
 import "./formats/"
-import "core:compress"
 import "core:fmt"
 import "core:path/filepath"
 import "core:slice"
@@ -86,10 +85,21 @@ load_asset :: proc(asset_index: int) {
 	case .WAD:
 		fmt.printfln("Nested WADs? Who'd have thought.")
 		fallthrough
-	case .TGA:
-		fallthrough
-	case .PNG:
-		fallthrough
+	case .TGA, .PNG:
+		image_result := Image_Result {
+			path    = asset.filename,
+			loading = true,
+			type    = asset_type,
+		}
+
+		asset_result = image_result
+
+		image_result.raw_data = data
+
+		image_result.status = .Success
+		image_result.loading = false
+
+		asset_result = image_result
 	case .UNKNOWN:
 		fmt.printfln("Asset type is unsupported: %s", asset.filename)
 		unknown_result := Unknown_Result {
