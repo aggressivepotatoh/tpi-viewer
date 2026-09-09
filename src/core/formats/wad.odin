@@ -1,7 +1,6 @@
 package formats
 
 import "core:encoding/endian"
-import "core:fmt"
 import "core:os"
 import "core:strings"
 

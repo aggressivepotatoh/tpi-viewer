@@ -11,6 +11,7 @@ load_file :: proc(file: File_Info) {
 	fmt.printfln("Loading %s", file.path)
 
 	free_file_result(file_result)
+	free_file_result(asset_result)
 
 	switch file.asset_type {
 	case .SAM:

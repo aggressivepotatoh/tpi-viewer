@@ -54,6 +54,22 @@ handle_file_interaction :: proc "c" (
 	}
 }
 
+handle_asset_interaction :: proc "c" (
+	id: clay.ElementId,
+	ptr_data: clay.PointerData,
+	user_data: rawptr,
+) {
+	context = runtime.default_context()
+
+	if ptr_data.state == .PressedThisFrame {
+		asset_index := int(uintptr(user_data))
+		selected_file := core.file_result.(core.Wad_Result)
+		if asset_index >= 0 && asset_index < len(selected_file.assets) {
+			select_asset(asset_index)
+		}
+	}
+}
+
 is_file_in_filter :: proc(file: core.File_Info) -> bool {
 	if current_filter == .All do return true
 
@@ -145,7 +161,7 @@ render_file_item :: proc(file: core.File_Info, file_index: int) {
 					},
 				},
 				) {
-					// clay.OnHover(handle_file_interaction, rawptr(uintptr(file_index)))
+					clay.OnHover(handle_asset_interaction, rawptr(uintptr(i)))
 					text_color := styles.COLOR_TEXT_SECONDARY
 					if clay.Hovered() do text_color = styles.COLOR_ACCENT
 					if asset_is_selected do text_color = styles.COLOR_TEXT_PRIMARY

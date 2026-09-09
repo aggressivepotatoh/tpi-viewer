@@ -19,11 +19,16 @@ Line :: struct {
 }
 
 parse_sam_file :: proc(file: string) -> ([]Line, []byte, SamParseError) {
-	lines: [dynamic]Line
 	data, err := os.read_entire_file(file, context.allocator)
 	if err != nil {
 		return nil, nil, err
 	}
+
+	return parse_sam_file_bytes(data)
+}
+
+parse_sam_file_bytes :: proc(data: []byte) -> ([]Line, []byte, SamParseError) {
+	lines: [dynamic]Line
 
 	it := string(data)
 

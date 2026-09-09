@@ -40,8 +40,15 @@ selected_asset_index := -1
 
 select_file :: proc(file_index: int) {
 	components.clear_image()
+	selected_asset_index = -1
 	selected_document_index = file_index
 	core.load_file(files[file_index])
+}
+
+select_asset :: proc(asset_index: int) {
+	components.clear_image()
+	selected_asset_index = asset_index
+	core.load_asset(asset_index)
 }
 
 create_layout :: proc(frametime: f32) -> clay.ClayArray(clay.RenderCommand) {
@@ -135,7 +142,11 @@ create_layout :: proc(frametime: f32) -> clay.ClayArray(clay.RenderCommand) {
 
 				if clay.UI(clay.ID("Stage"))(
 				{
-					layout = {sizing = layout_expand, padding = clay.PaddingAll(16)},
+					layout = {
+						sizing = layout_expand,
+						layoutDirection = .TopToBottom,
+						padding = clay.PaddingAll(16),
+					},
 					clip = {
 						vertical = true,
 						horizontal = true,
